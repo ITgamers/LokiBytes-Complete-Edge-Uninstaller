@@ -271,7 +271,7 @@ class MainWindow(ctk.CTk):
         self._output_queue: queue.Queue = queue.Queue()
 
         self.title("LokiBytes Edge Uninstaller")
-        self.geometry("640x640")
+        self.geometry("640x720")
         self.resizable(False, False)
         self.configure(fg_color=Palette.BLACK)
         try:
