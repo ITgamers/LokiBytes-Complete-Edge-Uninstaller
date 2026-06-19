@@ -18,7 +18,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 from PIL import Image
 
-APP_VERSION = "1.0.1"
+APP_VERSION = "1.1.0"
 DONATE_URL = "https://paypal.me/ITgamer"
 
 # When frozen by PyInstaller, bundled data files live under sys._MEIPASS
