@@ -28,7 +28,8 @@ browser itself.
 5. Force-uninstalls Edge via its own `setup.exe` (system-level and user-level)
 6. Removes EdgeUpdate scheduled tasks and services (`edgeupdate`, `edgeupdatem`)
 7. Deletes leftover Edge/EdgeUpdate folders, registry keys, and Start Menu/Desktop shortcuts
-8. Sets an EdgeUpdate policy that blocks Edge from silently reinstalling itself
+8. Sets an EdgeUpdate policy that blocks Edge from silently reinstalling itself (can be opted
+   out of via the GUI checkbox or `-SkipAutoReinstallBlock`)
 9. Optionally reverts the region back to its original value
 
 A reboot is recommended after running it, and Windows feature updates (not regular Edge
@@ -44,8 +45,10 @@ Grab the latest `LokiBytes-Edge-Uninstaller.exe` from the
 1. Download and run `LokiBytes-Edge-Uninstaller.exe`
 2. Accept the UAC prompt (administrator rights are required)
 3. Pick a temporary EEA region (Germany is fine for everyone — any EEA country satisfies the
-   uninstall gate) and optionally check "revert region after uninstalling"
-4. Click **Uninstall Edge** and confirm
+   uninstall gate), optionally check "revert region after uninstalling", and leave "block Edge
+   from silently reinstalling itself" checked (recommended)
+4. Click **Uninstall Edge**, make sure you already have another browser installed, then wait
+   out the 5-second countdown and click **Continue**
 5. Watch the live log, then reboot when it's done
 
 ### Running from source instead

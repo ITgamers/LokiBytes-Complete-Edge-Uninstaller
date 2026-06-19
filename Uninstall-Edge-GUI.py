@@ -187,6 +187,83 @@ class AboutDialog(ctk.CTkToplevel):
         gold_button(self, text="Close", variant="secondary", command=self.destroy, width=110).pack(pady=(16, 20))
 
 
+class PreUninstallWarningDialog(ctk.CTkToplevel):
+    """Topmost warning shown before the uninstall runs.
+
+    Forces a 5-second pause before "Continue" can be clicked so the warning
+    actually gets read instead of reflexively dismissed.
+    """
+
+    def __init__(self, master):
+        super().__init__(master)
+        self.result = False
+        self._countdown = 5
+
+        self.title("Before You Continue")
+        self.geometry("460x300")
+        self.resizable(False, False)
+        self.configure(fg_color=Palette.BLACK)
+        self.attributes("-topmost", True)
+        self.after(250, self._set_icon)
+        self.transient(master)
+        self.after(50, self.grab_set)
+        self.protocol("WM_DELETE_WINDOW", self._on_cancel)
+        self._build()
+
+    def _set_icon(self) -> None:
+        try:
+            self.iconbitmap(str(ICON_PATH))
+        except Exception:
+            pass
+
+    def _build(self) -> None:
+        ctk.CTkLabel(
+            self, text="⚠", text_color=Palette.ERROR,
+            font=ctk.CTkFont(family="Segoe UI", size=32, weight="bold"),
+        ).pack(pady=(20, 8))
+
+        ctk.CTkLabel(
+            self,
+            text=(
+                "Make sure you already have another web browser installed (e.g. Chrome "
+                "or Firefox) before continuing -- removing Microsoft Edge can leave "
+                "Windows without a working browser for links and some system features.\n\n"
+                "This will permanently uninstall Microsoft Edge and remove its leftover "
+                "files, services, and registry keys."
+            ),
+            text_color=Palette.TEXT_PRIMARY, font=get_font("body"), justify="center", wraplength=400,
+        ).pack(padx=24, pady=(0, 16))
+
+        btn_row = ctk.CTkFrame(self, fg_color="transparent")
+        btn_row.pack(pady=(0, 20))
+        gold_button(btn_row, text="Cancel", variant="secondary", command=self._on_cancel, width=100).pack(
+            side="left", padx=(0, 8)
+        )
+        self._continue_btn = gold_button(
+            btn_row, text="Continue (5)", variant="danger", command=self._on_continue, width=120,
+        )
+        self._continue_btn.configure(state="disabled")
+        self._continue_btn.pack(side="left")
+
+        self.after(1000, self._tick)
+
+    def _tick(self) -> None:
+        self._countdown -= 1
+        if self._countdown <= 0:
+            self._continue_btn.configure(text="Continue", state="normal")
+        else:
+            self._continue_btn.configure(text=f"Continue ({self._countdown})")
+            self.after(1000, self._tick)
+
+    def _on_continue(self) -> None:
+        self.result = True
+        self.destroy()
+
+    def _on_cancel(self) -> None:
+        self.result = False
+        self.destroy()
+
+
 class MainWindow(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -255,7 +332,26 @@ class MainWindow(ctk.CTk):
             fg_color=Palette.GOLD, hover_color=Palette.GOLD_HOVER, checkmark_color=Palette.TEXT_ON_GOLD,
             border_color=Palette.GOLD,
         )
-        self._revert_check.pack(anchor="w", pady=(0, 14))
+        self._revert_check.pack(anchor="w", pady=(0, 6))
+
+        self._block_reinstall_var = ctk.BooleanVar(value=True)
+        self._block_reinstall_check = ctk.CTkCheckBox(
+            body, text="Block Edge from silently reinstalling itself (recommended)",
+            variable=self._block_reinstall_var, text_color=Palette.TEXT_SECONDARY, font=get_font("body"),
+            fg_color=Palette.GOLD, hover_color=Palette.GOLD_HOVER, checkmark_color=Palette.TEXT_ON_GOLD,
+            border_color=Palette.GOLD,
+        )
+        self._block_reinstall_check.pack(anchor="w", pady=(0, 2))
+
+        ctk.CTkLabel(
+            body,
+            text=(
+                "Stops Edge's own background updater from reinstalling it. Cannot stop a Windows "
+                "feature update (a full OS version upgrade) from restoring Edge -- re-run this tool "
+                "afterward if that happens."
+            ),
+            text_color=Palette.TEXT_SECONDARY, font=get_font("small"), wraplength=580, justify="left", anchor="w",
+        ).pack(anchor="w", fill="x", pady=(0, 14))
 
         ctk.CTkLabel(
             body,
@@ -321,6 +417,7 @@ class MainWindow(ctk.CTk):
         self._run_btn.configure(state=state)
         self._region_menu.configure(state=state)
         self._revert_check.configure(state=state)
+        self._block_reinstall_check.configure(state=state)
         if running:
             self._progress.start()
         else:
@@ -328,11 +425,9 @@ class MainWindow(ctk.CTk):
         self._status_lbl.configure(text="Uninstalling Edge... please wait." if running else "Ready.")
 
     def _on_run(self) -> None:
-        if not messagebox.askyesno(
-            "Confirm Uninstall",
-            "This will permanently uninstall Microsoft Edge and remove its leftover "
-            "files, services, and registry keys. Continue?",
-        ):
+        dialog = PreUninstallWarningDialog(self)
+        self.wait_window(dialog)
+        if not dialog.result:
             return
 
         self._output.configure(state="normal")
@@ -347,6 +442,8 @@ class MainWindow(ctk.CTk):
         ]
         if self._revert_var.get():
             args.append("-RevertRegionAfter")
+        if not self._block_reinstall_var.get():
+            args.append("-SkipAutoReinstallBlock")
 
         threading.Thread(target=self._run_worker, args=(args,), daemon=True).start()
         self.after(150, self._poll_queue)

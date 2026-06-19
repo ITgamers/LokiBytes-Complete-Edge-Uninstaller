@@ -25,6 +25,14 @@
         Set-WinHomeLocation -GeoId <originalGeoId>
     (the original GeoId is printed at the start of the run).
 
+.PARAMETER SkipAutoReinstallBlock
+    If set, skips writing the EdgeUpdate policy that stops Edge's own
+    background updater from silently reinstalling it. Leave unset (default)
+    to keep that block in place. Note that this policy only stops Edge's
+    self-updater -- it cannot stop a Windows *feature* update (a full OS
+    version upgrade) from re-laying-down Edge's inbox files; re-run this
+    script afterward if that happens.
+
 .NOTES
     Must be run from an elevated (Administrator) PowerShell window.
     A reboot is recommended after running.
@@ -33,7 +41,8 @@
 [CmdletBinding()]
 param(
     [string]$TempRegion = "DE",
-    [switch]$RevertRegionAfter
+    [switch]$RevertRegionAfter,
+    [switch]$SkipAutoReinstallBlock
 )
 
 function Write-Step($msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
@@ -158,11 +167,16 @@ foreach ($s in $shortcuts) {
     if (Test-Path $s) { Remove-Item $s -Force -ErrorAction SilentlyContinue }
 }
 
-Write-Step "Blocking automatic Edge reinstall via Edge Update policy"
-$policyPath = "HKLM:\SOFTWARE\Policies\Microsoft\EdgeUpdate"
-New-Item -Path $policyPath -Force | Out-Null
-New-ItemProperty -Path $policyPath -Name "InstallDefault" -PropertyType DWord -Value 0 -Force | Out-Null
-New-ItemProperty -Path $policyPath -Name "Install{56EB18F8-8008-4CBD-B6D2-8C97FE7E9062}" -PropertyType DWord -Value 0 -Force | Out-Null
+if (-not $SkipAutoReinstallBlock) {
+    Write-Step "Blocking automatic Edge reinstall via Edge Update policy"
+    $policyPath = "HKLM:\SOFTWARE\Policies\Microsoft\EdgeUpdate"
+    New-Item -Path $policyPath -Force | Out-Null
+    New-ItemProperty -Path $policyPath -Name "InstallDefault" -PropertyType DWord -Value 0 -Force | Out-Null
+    New-ItemProperty -Path $policyPath -Name "Install{56EB18F8-8008-4CBD-B6D2-8C97FE7E9062}" -PropertyType DWord -Value 0 -Force | Out-Null
+}
+else {
+    Write-Warn2 "Skipping EdgeUpdate auto-reinstall block (opted out)."
+}
 
 if ($RevertRegionAfter) {
     Write-Step "Reverting region to original GeoId ($originalGeoId)"
