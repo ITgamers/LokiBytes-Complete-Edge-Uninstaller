@@ -18,7 +18,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 from PIL import Image
 
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.1"
 DONATE_URL = "https://paypal.me/ITgamer"
 
 # When frozen by PyInstaller, bundled data files live under sys._MEIPASS
@@ -126,13 +126,19 @@ class AboutDialog(ctk.CTkToplevel):
         self.geometry("460x460")
         self.resizable(False, False)
         self.configure(fg_color=Palette.BLACK)
+        # CTkToplevel unconditionally resets its titlebar icon to CustomTkinter's
+        # own default 200ms after construction, so ours must be set after that
+        # or it gets silently overwritten.
+        self.after(250, self._set_icon)
+        self.transient(master)
+        self.after(50, self.grab_set)
+        self._build()
+
+    def _set_icon(self) -> None:
         try:
             self.iconbitmap(str(ICON_PATH))
         except Exception:
             pass
-        self.transient(master)
-        self.after(50, self.grab_set)
-        self._build()
 
     def _build(self) -> None:
         ctk.CTkFrame(self, fg_color="transparent", height=16).pack()
