@@ -110,27 +110,53 @@ if (-not $systemSetups -and -not $userSetups) {
     Write-Warn2 "No setup.exe found -- Edge may already be partially removed. Continuing with cleanup anyway."
 }
 
+Write-Step "Checking whether the WebView2 Runtime is installed"
+$webView2Guid = "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+$webView2Present = @(
+    "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\$webView2Guid",
+    "HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients\$webView2Guid",
+    "HKCU:\SOFTWARE\Microsoft\EdgeUpdate\Clients\$webView2Guid",
+    "C:\Program Files (x86)\Microsoft\EdgeWebView",
+    "C:\Program Files\Microsoft\EdgeWebView"
+) | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+if ($webView2Present) {
+    Write-Warn2 "WebView2 Runtime detected -- the shared EdgeUpdate service/tasks/registry hive it depends on will be kept, only Edge's own entries will be removed."
+}
+
 Write-Step "Removing Edge Update scheduled tasks"
-Get-ScheduledTask -TaskName "MicrosoftEdgeUpdate*" -ErrorAction SilentlyContinue |
-    Unregister-ScheduledTask -Confirm:$false -ErrorAction SilentlyContinue
+if (-not $webView2Present) {
+    Get-ScheduledTask -TaskName "MicrosoftEdgeUpdate*" -ErrorAction SilentlyContinue |
+        Unregister-ScheduledTask -Confirm:$false -ErrorAction SilentlyContinue
+}
+else {
+    Write-Warn2 "Skipping -- these tasks also keep the WebView2 Runtime up to date."
+}
 
 Write-Step "Removing Edge Update services"
-foreach ($svc in "edgeupdate", "edgeupdatem") {
-    if (Get-Service $svc -ErrorAction SilentlyContinue) {
-        Stop-Service $svc -Force -ErrorAction SilentlyContinue
-        sc.exe delete $svc | Out-Null
+if (-not $webView2Present) {
+    foreach ($svc in "edgeupdate", "edgeupdatem") {
+        if (Get-Service $svc -ErrorAction SilentlyContinue) {
+            Stop-Service $svc -Force -ErrorAction SilentlyContinue
+            sc.exe delete $svc | Out-Null
+        }
     }
+}
+else {
+    Write-Warn2 "Skipping -- these services also keep the WebView2 Runtime up to date."
 }
 
 Write-Step "Removing leftover Edge directories (WebView2 Runtime is left untouched)"
 $paths = @(
     "C:\Program Files (x86)\Microsoft\Edge",
     "C:\Program Files (x86)\Microsoft\EdgeCore",
-    "C:\Program Files (x86)\Microsoft\EdgeUpdate",
     "C:\Program Files\Microsoft\Edge",
-    "$env:LOCALAPPDATA\Microsoft\Edge",
-    "$env:LOCALAPPDATA\Microsoft\EdgeUpdate"
+    "$env:LOCALAPPDATA\Microsoft\Edge"
 )
+if (-not $webView2Present) {
+    $paths += "C:\Program Files (x86)\Microsoft\EdgeUpdate"
+    $paths += "$env:LOCALAPPDATA\Microsoft\EdgeUpdate"
+}
 foreach ($p in $paths) {
     if (Test-Path $p) {
         Write-Host "    Removing $p"
@@ -139,9 +165,25 @@ foreach ($p in $paths) {
 }
 
 Write-Step "Cleaning leftover registry keys"
-$regKeys = @(
-    "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate",
-    "HKLM:\SOFTWARE\Microsoft\EdgeUpdate",
+$edgeGuid = "{56EB18F8-8008-4CBD-B6D2-8C97FE7E9062}"
+if (-not $webView2Present) {
+    # Nothing else depends on the EdgeUpdate hive, so the whole tree can go.
+    $regKeys = @(
+        "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate",
+        "HKLM:\SOFTWARE\Microsoft\EdgeUpdate"
+    )
+}
+else {
+    # WebView2 registers its own Clients/ClientState entries in this same
+    # hive, so only Edge's own GUID subkeys are removed, not the hive itself.
+    $regKeys = @()
+    foreach ($base in "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate", "HKLM:\SOFTWARE\Microsoft\EdgeUpdate") {
+        foreach ($sub in "Clients", "ClientState", "ClientStateMedium") {
+            $regKeys += "$base\$sub\$edgeGuid"
+        }
+    }
+}
+$regKeys += @(
     "HKLM:\SOFTWARE\Microsoft\Edge",
     "HKCU:\SOFTWARE\Microsoft\Edge",
     "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Microsoft Edge",
